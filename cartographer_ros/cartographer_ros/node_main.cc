@@ -56,6 +56,7 @@ void Run() {
   std::tie(node_options, trajectory_options) =
       LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);
 
+  // TOUR carto_ros接口：1.控制SLAM系统运行的节点
   auto map_builder =
       cartographer::mapping::CreateMapBuilder(node_options.map_builder_options);
   Node node(node_options, std::move(map_builder), &tf_buffer,
@@ -64,6 +65,8 @@ void Run() {
     node.LoadState(FLAGS_load_state_filename, FLAGS_load_frozen_state);
   }
 
+  // TOUR carto_ros接口：2.添加轨迹意味着开启slam
+  // TODO 了解carto是如何支持添加多条轨迹的
   if (FLAGS_start_trajectory_with_default_topics) {
     node.StartTrajectoryWithDefaultTopics(trajectory_options);
   }

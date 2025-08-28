@@ -74,6 +74,7 @@ bool SensorBridge::IgnoreMessage(const std::string& sensor_id,
   return sensor_time <= it->second;
 }
 
+// TOUR 传感器数据处理：2.以下Handle函数对msg数据进行类型转换与坐标变换，再调用CollatedTrajectoryBuilder的AddSensorData进行处理
 void SensorBridge::HandleOdometryMessage(
     const std::string& sensor_id, const nav_msgs::Odometry::ConstPtr& msg) {
   std::unique_ptr<carto::sensor::OdometryData> odometry_data =
@@ -218,6 +219,9 @@ void SensorBridge::HandleLaserScan(
     return;
   }
   CHECK_LE(points.points.back().time, 0.f);
+
+  // NOTE 将一帧LaserScan分割，对于2d雷达，该参数默认为10,3d雷达则为1
+  // TODO 这里分割点云处理的作用是什么？
   // TODO(gaschler): Use per-point time instead of subdivisions.
   for (int i = 0; i != num_subdivisions_per_laser_scan_; ++i) {
     const size_t start_index =

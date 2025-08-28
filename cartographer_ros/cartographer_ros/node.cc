@@ -59,6 +59,7 @@ using TrajectoryState =
 namespace {
 // Subscribes to the 'topic' for 'trajectory_id' using the 'node_handle' and
 // calls 'handler' on the 'node' to handle messages. Returns the subscriber.
+// NOTE ros::NodeHandle::subscribe接收的回调函数只有一个msg形参，故这里使用boost::function和lambda表达式来适配
 template <typename MessageType>
 ::ros::Subscriber SubscribeWithHandler(
     void (Node::*handler)(int, const std::string&,
@@ -97,6 +98,8 @@ Node::Node(
     : node_options_(node_options),
       map_builder_bridge_(node_options_, std::move(map_builder), tf_buffer) {
   absl::MutexLock lock(&mutex_);
+
+  // TODO 了解collect_metrics参数的作用
   if (collect_metrics) {
     metrics_registry_ = absl::make_unique<metrics::FamilyFactory>();
     carto::metrics::RegisterAllMetrics(metrics_registry_.get());
@@ -397,10 +400,18 @@ Node::ComputeExpectedSensorIds(const TrajectoryOptions& options) const {
 int Node::AddTrajectory(const TrajectoryOptions& options) {
   const std::set<cartographer::mapping::TrajectoryBuilderInterface::SensorId>
       expected_sensor_ids = ComputeExpectedSensorIds(options);
+
+  // TOUR carto_ros接口：3.通过MapBuilderBridge调用carto的MapBuilder来添加轨迹
   const int trajectory_id =
       map_builder_bridge_.AddTrajectory(expected_sensor_ids, options);
+
+  // NOTE 这里创建的PoseExtrapolator实例只是用来发布轨迹用的
   AddExtrapolator(trajectory_id, options);
+  
+  // NOTE 根据配置文件，设置接收到的各传感器消息后的采样比（接收到多少帧消息后处理一次），如果采样比为1，则会处理所有数据。
   AddSensorSamplers(trajectory_id, options);
+  
+  // TOUR carto_ros接口：4.订阅传感器数据，注册回调函数;回调函数实现在名为Handle*Message的一系列函数中
   LaunchSubscribers(options, trajectory_id);
   wall_timers_.push_back(node_handle_.createWallTimer(
       ::ros::WallDuration(kTopicMismatchCheckDelaySec),
@@ -762,6 +773,7 @@ void Node::RunFinalOptimization() {
   map_builder_bridge_.RunFinalOptimization();
 }
 
+// TOUR 传感器数据处理：1.以下函数内会调用SensorBridge的传感器处理函数进行数据分发，odom和imu的数据会被额外传入到PoseExtrapolator中
 void Node::HandleOdometryMessage(const int trajectory_id,
                                  const std::string& sensor_id,
                                  const nav_msgs::Odometry::ConstPtr& msg) {
